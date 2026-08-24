@@ -48,7 +48,7 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="llm-contract-auditor web", lifespan=lifespan)
+    app = FastAPI(title="SA (Smart Contract Auditor) API", lifespan=lifespan)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[DEV_FRONTEND_ORIGIN],

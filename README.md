@@ -1,12 +1,13 @@
-# llm-contract-auditor
+# SA — Smart Contract Auditor
 
-Web3 스마트컨트랙트 정적분석 결과보고서 생성 도구.
+Web3 스마트컨트랙트 정적분석 도구. 컨트랙트 코드의 어디가 왜 취약한지 인라인
+코드 뷰어로 보여주고, Markdown 리포트도 함께 제공한다.
 
 ```
-[컨트랙트 주소 또는 .sol 파일 입력] -> [Slither 취약점 분석] -> [Markdown 결과보고서]
+[컨트랙트 주소 또는 .sol 파일 입력] -> [Slither 취약점 분석] -> [인라인 코드 뷰어 + Markdown 리포트]
 ```
 
-**현재 버전은 LLM을 전혀 호출하지 않는다.** Slither 정적분석 결과를 정적 지식베이스
+**LLM을 전혀 호출하지 않는다.** Slither 정적분석 결과를 정적 지식베이스
 (`data/detector_explanations.json`)로 사람이 읽기 쉽게 정리해서 보여주는 것이
 전부다. 비용은 발생하지 않는다. LLM 판단 레이어는 `docs/future/`에 설계만 남겨두고
 추후 재도입 여부를 논의한다.

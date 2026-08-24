@@ -1,5 +1,5 @@
 [project]
-name = "llm-contract-auditor"
+name = "sc-auditor"
 version = "0.1.0"
 description = "Slither 정적분석 기반 Web3 스마트컨트랙트 보안 리포트 생성 도구 (LLM 미사용)"
 requires-python = ">=3.11"
