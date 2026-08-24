@@ -6,6 +6,7 @@ reports/<job_id>/ 파일로 관리하고, 이 DB는 상태 추적(폴링, 소유
 """
 
 import sqlite3
+import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -25,6 +26,17 @@ CREATE TABLE IF NOT EXISTS jobs (
     updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_jobs_session ON jobs(session_id);
+
+-- 세션/IP 슬라이딩 윈도우 레이트리밋 히트 기록. 예전엔 프로세스 인메모리
+-- dict였는데, 서버 재시작하면 리셋되고 여러 워커 프로세스 사이에 공유도
+-- 안 됐다 — 이미 있는 sqlite 파일을 그대로 써서(신규 의존성 없이) 두
+-- 문제를 한 번에 해결한다.
+CREATE TABLE IF NOT EXISTS rate_limit_hits (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    key TEXT NOT NULL,
+    ts REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_rate_limit_key_ts ON rate_limit_hits(key, ts);
 """
 
 # CREATE TABLE IF NOT EXISTS는 이미 존재하는 jobs 테이블(예전 스키마로 만들어진
@@ -112,6 +124,36 @@ def list_jobs_by_session(
             (session_id, limit),
         )
         return cur.fetchall()
+
+
+def check_rate_limit(
+    key: str, limit: int, window_seconds: float, db_path: Path | None = None
+) -> bool:
+    """key가 최근 window_seconds 안에 limit번 이상 호출됐으면 False(제한 초과).
+    같은 커넥션 안에서 DELETE(윈도우 밖 기록 정리) -> COUNT -> INSERT를 한
+    트랜잭션으로 처리해 동시 요청 사이의 레이스를 SQLite의 쓰기 락으로 막는다."""
+    now = time.time()
+    cutoff = now - window_seconds
+    with get_connection(db_path) as conn:
+        conn.execute("DELETE FROM rate_limit_hits WHERE key = ? AND ts < ?", (key, cutoff))
+        count = conn.execute(
+            "SELECT COUNT(*) FROM rate_limit_hits WHERE key = ?", (key,)
+        ).fetchone()[0]
+        if count >= limit:
+            return False
+        conn.execute("INSERT INTO rate_limit_hits (key, ts) VALUES (?, ?)", (key, now))
+        return True
+
+
+def sweep_old_rate_limit_hits(max_age_seconds: float = 86400, db_path: Path | None = None) -> int:
+    """`check_rate_limit`은 자기가 조회한 key의 오래된 기록만 지운다 — 한동안
+    다시 안 보이는 세션/IP의 기록은 테이블에 계속 쌓인다. 현재 레이트리밋
+    윈도우가 전부 1시간 이내라 24시간이면 넉넉히 안전한 기준으로 서버 시작
+    시 한 번씩 정리한다."""
+    cutoff = time.time() - max_age_seconds
+    with get_connection(db_path) as conn:
+        cur = conn.execute("DELETE FROM rate_limit_hits WHERE ts < ?", (cutoff,))
+        return cur.rowcount
 
 
 def sweep_stale_jobs(db_path: Path | None = None) -> int:

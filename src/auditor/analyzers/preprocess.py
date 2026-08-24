@@ -66,9 +66,27 @@ def _relative_file_label(finding_file: Path, source_root: Path) -> str:
         return finding_file.name
 
 
+# 코드 뷰어 응답에 파일 내용을 그대로 embed할 때의 파일당 크기 상한.
+# 로컬 업로드는 web/uploads.py가 이미 2MB로 막지만, 온체인 주소 조회는
+# Etherscan이 주는 소스를 그대로 저장하다 보니 캡이 없었다 — 같은 기준으로 맞춘다.
+MAX_EMBEDDED_FILE_BYTES = 2 * 1024 * 1024
+
+
+def _read_embeddable_source(path: Path) -> tuple[str, bool]:
+    """파일을 읽되 너무 크면 내용 대신 안내 문구를 반환한다(truncated=True)."""
+    size = path.stat().st_size
+    if size > MAX_EMBEDDED_FILE_BYTES:
+        return (
+            f"(파일이 너무 커서 표시할 수 없습니다: {size // 1024}KB, "
+            f"최대 {MAX_EMBEDDED_FILE_BYTES // 1024 // 1024}MB)",
+            True,
+        )
+    return path.read_text(errors="ignore"), False
+
+
 def build_source_manifest(entry_path: Path, source_root: Path, multi_file: bool) -> list[dict]:
     """코드 뷰어에 넘길 소스 파일 목록을 만든다. 스니펫의 "12: code" 번호매김 포맷이
-    아니라 원본 그대로의 텍스트를 담는다.
+    아니라 원본 그대로의 텍스트를 담는다(파일이 너무 크면 예외 — 아래 참고).
 
     multi_file=False(로컬 업로드/CLI 임의 경로)면 entry 파일 하나만 담는다 —
     source_root를 통째로 훑으면 분석과 무관한 이웃 파일까지 끌려올 수 있다.
@@ -76,20 +94,24 @@ def build_source_manifest(entry_path: Path, source_root: Path, multi_file: bool)
     아래 모든 .sol 파일을 entry 파일을 맨 앞에 두고 나머지는 경로순으로 담는다.
     """
     if not multi_file:
+        content, truncated = _read_embeddable_source(entry_path)
         return [{
             "path": _relative_file_label(entry_path, source_root),
-            "content": entry_path.read_text(errors="ignore"),
+            "content": content,
+            "truncated": truncated,
         }]
 
     paths = sorted(source_root.rglob("*.sol"))
     paths.sort(key=lambda p: (p != entry_path, p))
-    return [
-        {
+    manifest = []
+    for p in paths:
+        content, truncated = _read_embeddable_source(p)
+        manifest.append({
             "path": _relative_file_label(p, source_root),
-            "content": p.read_text(errors="ignore"),
-        }
-        for p in paths
-    ]
+            "content": content,
+            "truncated": truncated,
+        })
+    return manifest
 
 
 def preprocess(

@@ -95,7 +95,15 @@ export function CodeViewer({ files, findings }: CodeViewerProps) {
   );
 
   function jumpTo(finding: FindingOut) {
-    if (finding.file === activeFilePath && viewRef.current) {
+    const targetFile = files.find((f) => f.path === finding.file);
+    if (targetFile?.truncated) {
+      // 이 파일은 너무 커서 에디터가 아예 마운트되지 않으므로 스크롤할 대상이
+      // 없다 — 파일만 전환한다.
+      pendingScrollLine.current = null;
+      setActiveFilePath(finding.file);
+      return;
+    }
+    if (finding.file === activeFilePath && !activeFile.truncated && viewRef.current) {
       scrollToLine(viewRef.current, finding.start_line);
       return;
     }
@@ -137,15 +145,24 @@ export function CodeViewer({ files, findings }: CodeViewerProps) {
 
       <div className="code-viewer-body">
         <div className="code-viewer-editor">
-          <CodeMirror
-            key={activeFilePath}
-            value={activeFile.content}
-            theme={theme === "dark" ? oneDark : "light"}
-            readOnly
-            height="calc(100vh - 200px)"
-            extensions={extensions}
-            onCreateEditor={handleCreateEditor}
-          />
+          {activeFile.truncated ? (
+            <div className="code-viewer-truncated">
+              <p>{activeFile.content}</p>
+              <p className="muted">
+                이 파일에 대한 finding은 Problems 목록에서 계속 확인할 수 있습니다.
+              </p>
+            </div>
+          ) : (
+            <CodeMirror
+              key={activeFilePath}
+              value={activeFile.content}
+              theme={theme === "dark" ? oneDark : "light"}
+              readOnly
+              height="calc(100vh - 200px)"
+              extensions={extensions}
+              onCreateEditor={handleCreateEditor}
+            />
+          )}
         </div>
 
         <aside className="code-viewer-problems">

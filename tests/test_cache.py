@@ -73,6 +73,26 @@ class TestLoadAndStore:
         time.sleep(0.01)
         assert cache.load("key1", tmp_path / "dest") is None
 
+    def test_expired_entry_is_deleted_from_disk(self, tmp_path, monkeypatch):
+        """
+        회귀 테스트(2026-08): 예전엔 load()가 만료된 엔트리를 미스로만 취급하고
+        파일은 CACHE_ROOT에 그대로 남겨뒀다 — 재조회되지 않는 키는 디스크를
+        영원히 잡아먹었다. 이제 만료 판정 시 그 자리에서 지운다.
+        """
+        report = tmp_path / "Foo.report.md"
+        report.write_text("# 리포트")
+        findings = tmp_path / "Foo.findings.json"
+        findings.write_text("{}")
+        cache.store("key1", report, findings, target_display="0xFoo")
+
+        monkeypatch.setattr(cache, "TTL_SECONDS", 0)
+        time.sleep(0.01)
+        cache.load("key1", tmp_path / "dest")
+
+        assert not (cache.CACHE_ROOT / "key1.meta.json").exists()
+        assert not (cache.CACHE_ROOT / "key1.report.md").exists()
+        assert not (cache.CACHE_ROOT / "key1.findings.json").exists()
+
     def test_corrupted_meta_file_is_treated_as_miss(self, tmp_path):
         report = tmp_path / "Foo.report.md"
         report.write_text("# 리포트")
@@ -84,6 +104,7 @@ class TestLoadAndStore:
         meta_path.write_text("not json")
 
         assert cache.load("key1", tmp_path / "dest") is None
+        assert not meta_path.exists()
 
     def test_missing_findings_cache_file_is_treated_as_miss(self, tmp_path):
         """
@@ -100,3 +121,40 @@ class TestLoadAndStore:
         (cache.CACHE_ROOT / "key1.findings.json").unlink()
 
         assert cache.load("key1", tmp_path / "dest") is None
+
+
+class TestSweepExpired:
+    def _store(self, tmp_path, key: str) -> None:
+        report = tmp_path / f"{key}.report.md"
+        report.write_text("# 리포트")
+        findings = tmp_path / f"{key}.findings.json"
+        findings.write_text("{}")
+        cache.store(key, report, findings, target_display=key)
+
+    def test_no_cache_root_returns_zero(self, tmp_path):
+        assert cache.sweep_expired() == 0
+
+    def test_removes_only_expired_entries(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(cache, "TTL_SECONDS", 100)
+        fake_now = [1000.0]
+        monkeypatch.setattr(cache.time, "time", lambda: fake_now[0])
+
+        self._store(tmp_path, "old")  # cached_at = 1000
+
+        fake_now[0] = 1150  # 150초 후 — TTL(100초)을 넘김
+        self._store(tmp_path, "fresh")  # cached_at = 1150, 아직 안 만료
+
+        removed = cache.sweep_expired()
+
+        assert removed == 1
+        assert not (cache.CACHE_ROOT / "old.meta.json").exists()
+        assert (cache.CACHE_ROOT / "fresh.meta.json").exists()
+
+    def test_removes_corrupted_meta_entries(self, tmp_path):
+        self._store(tmp_path, "broken")
+        (cache.CACHE_ROOT / "broken.meta.json").write_text("not json")
+
+        removed = cache.sweep_expired()
+
+        assert removed == 1
+        assert not (cache.CACHE_ROOT / "broken.meta.json").exists()

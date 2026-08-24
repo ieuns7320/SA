@@ -349,15 +349,78 @@ zero-check 누락 정도만 지적하고 접근 제어 자체의 부재는 잡�
       - 브라우저로 다크/라이트 양쪽 다 확인: 제출 폼, 도움말 패널,
         코드 뷰어(gutter/hover 팝업), 리포트 탭(코드 스니펫 포함) 전부
         라이트 모드에서도 가독성 확인. 새로고침 시 테마 유지(FOUC 없음)도 확인.
+    - **프로젝트명을 SA(Smart Contract Auditor)로 변경, GitHub 공개 레포로
+      전환.** 이름에 `llm`이 들어가 있었는데 실제로는 LLM을 안 써서 사용자가
+      직접 지적, 정리. `pyproject.toml` 패키지명(`sc-auditor`)/FastAPI 앱
+      타이틀/README 제목·설명 갱신. 로컬 개발 폴더명도 `sc-auditor`로 변경
+      (동명의 무관한 다른 프로젝트가 이미 `~/project/SA`를 쓰고 있어서 로컬
+      폴더명은 GitHub 레포명 `SA`와 다르게 감 — 로컬 폴더명과 GitHub 레포명이
+      같아야 할 필요는 없다는 걸 이 과정에서 확인). 폴더 rename 직후
+      `.venv`가 깨짐(활성화 스크립트에 절대경로가 박혀있어서) — 재생성으로
+      해결, venv는 원래 재현 가능한 산출물이라 git에도 안 잡힘. `gh repo
+      create --public`으로 https://github.com/ieuns7320/SA 에 push 완료
+      (라이선스는 사용자 선택으로 없음 = All rights reserved 유지, CI는
+      나중에 별도 진행하기로 함).
+    - **README/`pyproject.toml`에서 불필요한 "LLM 미사용" 문구 제거.**
+      사용자 지적: "LLM을 전혀 호출하지 않는다" 같은 문구는 프로젝트를
+      소개/사용할 때 필요한 정보가 아님(기술 구현 선택이지 사용자 관심사가
+      아님). README는 "판단하지 않고 있는 그대로 정리한다"는 실제 동작
+      원칙만 남기고 LLM 언급 자체를 뺌. **CLAUDE.md의 이 섹션(비용에 대한
+      원칙)과 "하지 말아야 할 것"은 의도적으로 그대로 둠** — 이건 사용자
+      안내문이 아니라 AI 에이전트가 이 원칙을 조용히 깨지 않도록 못박아둔
+      운영 규칙이라 성격이 다름.
+    - **높음 우선순위 실사용 이슈 4건 수정** (사용자가 프로젝트 리뷰를 요청해서
+      다시 우선순위 정리 후 진행):
+      1. **캐시 무한 증식** — `cache.py::load()`는 만료 판정만 하고 파일은 안
+         지웠다. 한 번도 재조회 안 되는 키는 `reports/.cache`에 영원히 남아
+         디스크를 계속 잡아먹는 문제. `load()`가 만료/손상 엔트리를 그 자리에서
+         지우도록 수정 + 신규 `sweep_expired()`(재조회 안 되는 키까지 정리,
+         웹 서버 시작 시 호출).
+      2. **레이트리밋이 프로세스 인메모리** — 재시작하면 카운터 리셋, 여러
+         워커 프로세스 사이에 공유도 안 됨. Redis 같은 새 인프라를 추가하는
+         대신, 이미 있는 `web_jobs.sqlite3`에 `rate_limit_hits` 테이블을
+         추가해서 옮김 — 신규 의존성 없이 재시작 생존 + 다중 프로세스 공유
+         둘 다 해결. `db.py::check_rate_limit()`이 DELETE(윈도우 밖 정리)
+         → COUNT → INSERT를 한 트랜잭션으로 처리해 동시 요청 레이스를
+         SQLite 쓰기 락으로 막음. `ratelimit.py`는 `db.check_rate_limit()`을
+         호출하는 얇은 래퍼로 축소(라우터 쪽 호출부 `ratelimit.check(...)`는
+         무변화). `db.sweep_old_rate_limit_hits()`(24시간 넘은 기록 정리)도
+         웹 서버 시작 시 호출. 실제 서버로 재현: curl+브라우저로 요청 보낸 뒤
+         `rate_limit_hits` 테이블에 세션/IP별 기록이 실제로 쌓이는 것까지
+         확인.
+      3. **쿠키 `Secure` 플래그가 기본 꺼짐** — `WEB_SECURE_COOKIES` env를
+         배포 시 깜빡하면 HTTPS인데도 세션 쿠키가 평문으로 나갈 위험.
+         `session.py::_resolve_secure_cookie_flag()` 신규 — env가 명시적으로
+         설정 안 됐으면 요청 자체(스킴 또는 `X-Forwarded-Proto` 헤더, 리버스
+         프록시 뒤에 있는 경우 대비)를 보고 자동으로 켠다. env는 자동 판단이
+         안 맞는 배포 환경을 위한 탈출구로만 남김. `curl -D -`로 로컬
+         `http://`에선 여전히 `Secure` 안 붙는 것, 실제로는 `https` 스킴이면
+         자동으로 붙는 것 둘 다 확인.
+      4. **코드 뷰어 응답 크기 무제한** — 로컬 업로드는 `uploads.py`가 2MB로
+         막지만 온체인 주소 조회는 캡이 없어 대형 멀티파일 컨트랙트의 전체
+         소스가 `findings.json`/API 응답에 그대로 embed됐다.
+         `preprocess.py::MAX_EMBEDDED_FILE_BYTES`(2MB, 업로드 캡과 동일
+         기준) 초과 파일은 내용 대신 안내 문구로 대체하고 `truncated: true`
+         표시. `SourceFileOut` 스키마/프론트 `SourceFileOut` 타입에
+         `truncated` 필드 추가(기존 findings.json에는 없는 필드라 Pydantic
+         기본값 `False`로 하위호환 유지). `CodeViewer.tsx`는 truncated인
+         파일은 CodeMirror 대신 플레이스홀더를 보여주고, Problems 목록에서
+         그 파일의 finding을 클릭하면 스크롤 시도 없이 파일 전환만 함(에디터가
+         아예 안 마운트되므로).
+      - 테스트 13개 추가(`test_cache.py`의 만료 삭제/`sweep_expired`,
+        `test_web_ratelimit.py` sqlite 기반으로 전면 재작성, 신규
+        `test_web_session.py`, `test_preprocess.py`의 truncation)로 전체
+        스위트 113 → 126개 전부 통과. 프론트엔드 타입체크/린트 통과.
   - 다음 할 일: 패키지 import remapping 지원, 로컬 파일 입력의 멀티파일 지원.
-    그 외 실사용 개선 백로그(아직 미착수): Git 저장소 자체가 아직 없음
-    (버전관리/CI 전제조건), CI 파이프라인 없음, CLI 옵션 빈약(`chain_id` 등
-    미노출), 프론트엔드 테스트 전무. 웹 UI 관련 추가 백로그: 레이트리밋
-    수치(세션 10/hr, IP 30/hr)는 placeholder라 운영하면서 조정 필요(인메모리라
-    재시작/다중 프로세스 스케일 시 무력화되는 것도 알려진 한계), 쿠키
-    `Secure` 플래그는 배포 시점(HTTPS 여부)에 맞춰 `WEB_SECURE_COOKIES` env로
-    켜야 함, 히스토리 목록에 페이지네이션 없음(`list_jobs_by_session` 기본
-    limit=50으로 절단).
+    그 외 실사용 개선 백로그(아직 미착수): CI 파이프라인 없음(사용자가 나중에
+    따로 하기로 함), CLI 옵션 빈약(`chain_id` 등 미노출), 프론트엔드 테스트
+    전무. 웹 UI 관련 추가 백로그: 레이트리밋 수치(세션 10/hr, IP 30/hr)는
+    여전히 placeholder라 운영하면서 조정 필요, 히스토리 목록에 페이지네이션
+    없음(`list_jobs_by_session` 기본 limit=50으로 절단), 프로덕션 배포
+    가이드 없음(로컬 dev 워크플로우만 문서화됨 — 프론트엔드가 `/api`를
+    상대경로로 호출해서 같은 오리진 배포를 전제하는데 이것도 명시적으로
+    문서화된 적 없음), solc-select 부분 설치 실패 자동 복구 없음, 프록시
+    1홉만 해석, 코드 뷰어 파일 목록이 트리가 아니라 플랫 리스트.
 - [ ] **2단계 (보류)**: RAG 기반 과거 해킹 사례 유사도 매칭. 로컬 임베딩만 사용.
 - [ ] **3단계 (보류)**: Foundry PoC 자동 검증.
 - [ ] **4단계 (보류, `docs/future/` 참고)**: LLM 판단 레이어 재도입 — 오탐 필터링,
@@ -415,7 +478,8 @@ src/auditor/
     preprocess.py           Slither JSON 정제 + 코드 스니펫 첨부. finding['file']은
                                source_root 기준 상대경로, start_line/end_line 정수
                                필드 포함. build_source_manifest()로 코드 뷰어용
-                               소스 원문 목록도 생성.
+                               소스 원문 목록도 생성 — MAX_EMBEDDED_FILE_BYTES(2MB)
+                               넘는 파일은 내용 대신 안내 문구 + truncated=True.
   report/
     generator.py             전처리 결과 + 정적 지식베이스 -> Markdown 리포트.
                                 enrich_finding()/load_explanations()는 web의
@@ -426,10 +490,18 @@ src/auditor/
     db.py                        SQLite job 메타데이터 CRUD + list_jobs_by_session
                                     (히스토리용) (reports/web_jobs.sqlite3).
                                     init_db()가 findings_path 컬럼 마이그레이션도 함.
+                                    rate_limit_hits 테이블 + check_rate_limit()/
+                                    sweep_old_rate_limit_hits()도 여기 있음
+                                    (ratelimit.py가 이걸 감싸는 얇은 래퍼).
     schemas.py                    Pydantic 응답 모델 (FindingOut/SourceFileOut/
-                                     AnnotatedSourceResponse 포함)
-    session.py                    익명 세션 쿠키 (로그인 없음)
-    ratelimit.py                  세션+IP 슬라이딩 윈도우 (인메모리)
+                                     AnnotatedSourceResponse 포함, SourceFileOut에
+                                     truncated: bool = False)
+    session.py                    익명 세션 쿠키 (로그인 없음). Secure 플래그는
+                                     WEB_SECURE_COOKIES가 명시적으로 없으면 요청
+                                     스킴/X-Forwarded-Proto로 자동 판단.
+    ratelimit.py                  세션+IP 슬라이딩 윈도우. db.py의 rate_limit_hits
+                                     테이블에 저장(재시작 생존, 다중 프로세스 공유,
+                                     신규 의존성 없음).
     uploads.py                    업로드 파일 크기/확장자/경로안전 검증
     routers/jobs.py                GET/POST /api/jobs(목록/생성), GET /api/jobs/{id},
                                       GET /api/jobs/{id}/report,
@@ -440,7 +512,9 @@ src/auditor/
                                 run_pipeline()의 반환 타입
   cache.py                   파이프라인 결과 파일 캐시 (주소/파일내용 해시 키, TTL 6시간).
                                 report.md + findings.json 둘 다 캐시, 하나라도
-                                없으면 완전 미스로 취급.
+                                없으면 완전 미스로 취급. load()가 만료/손상 엔트리를
+                                그 자리에서 삭제, sweep_expired()로 재조회 안 되는
+                                엔트리까지 서버 시작 시 정리(디스크 무한 증식 방지).
   cli.py                     전체 파이프라인 진입점 (입력 -> 분석 -> 리포트+findings,
                                 --refresh 지원). run_pipeline()은 PipelineResult 반환.
 
@@ -476,7 +550,8 @@ tests/
                                  기준 상대경로, build_source_manifest) 단위 테스트
   test_generator.py           리포트 생성 + detector_explanations.json 필드 검증
   test_cache.py                 파이프라인 결과 캐시 키/TTL/만료 단위 테스트
-                                   (report.md+findings.json 동시 캐싱 포함)
+                                   (report.md+findings.json 동시 캐싱, 만료/손상
+                                   엔트리 삭제, sweep_expired() 포함)
   test_slither_runner.py     pragma 파싱, solc-select 폴백, --solc 플래그 전달,
                                  리소스 제한 셸 래핑 단위 테스트
   test_address_fetcher.py   Etherscan 응답 처리 단위 테스트 (requests 모킹, 실제 API 미호출)
@@ -485,7 +560,10 @@ tests/
                                    findings.json/source_files까지 검증)
   test_web_db.py                   web/db.py CRUD + list_jobs_by_session + 재시작 후
                                       정리 로직 + findings_path 컬럼 마이그레이션 단위 테스트
-  test_web_ratelimit.py              web/ratelimit.py 슬라이딩 윈도우 단위 테스트
+  test_web_ratelimit.py              web/ratelimit.py 슬라이딩 윈도우 단위 테스트 (sqlite
+                                        기반 — 재시작 생존 회귀 테스트 포함)
+  test_web_session.py                web/session.py Secure 쿠키 플래그 자동 판단
+                                        (스킴/X-Forwarded-Proto/env 오버라이드) 단위 테스트
   test_web_api.py                      FastAPI TestClient 통합 테스트 (세션 격리, 레이트리밋,
                                           업로드 검증, job 실패 전달, 히스토리 목록,
                                           GET /api/jobs/{id}/source, 실제 slither e2e 1개 포함)
@@ -556,6 +634,11 @@ pytest
   `findings.json` 도입 때 이 패턴을 따름).
 - 웹 레이어(`src/auditor/web/`)는 `auditor.cli.run_pipeline()`을 감싸기만
   한다 — 파이프라인 로직을 웹 레이어에 다시 구현하지 않는다.
+- 웹 백엔드에 재시작/다중 프로세스 사이에 공유되어야 하는 상태(레이트리밋
+  카운터 등)가 필요해지면, 먼저 이미 있는 `web_jobs.sqlite3`에 테이블을
+  추가하는 걸 고려한다 — Redis 같은 새 인프라 의존성을 추가하기 전에.
+  실제로 인메모리 레이트리밋을 sqlite로 옮기면서 신규 의존성 없이 "재시작
+  생존"과 "다중 프로세스 공유" 두 문제를 한 번에 해결했다.
 
 ## 하지 말아야 할 것
 

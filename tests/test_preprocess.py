@@ -277,3 +277,27 @@ class TestBuildSourceManifest:
 
         manifest = build_source_manifest(entry, project_root, multi_file=True)
         assert {f["path"] for f in manifest} == {"MyContract.sol", "lib/Lib.sol"}
+
+    def test_normal_size_file_is_not_truncated(self, tmp_path, two_files):
+        file_a, _ = two_files
+        manifest = build_source_manifest(file_a, tmp_path, multi_file=False)
+        assert manifest[0]["truncated"] is False
+
+    def test_oversized_file_is_replaced_with_placeholder(self, tmp_path, monkeypatch):
+        """
+        회귀 테스트(2026-08): 로컬 업로드는 web/uploads.py가 2MB로 막지만, 온체인
+        주소 조회는 캡이 없어 대형 컨트랙트의 전체 소스가 findings.json/API
+        응답에 그대로 embed됐다. MAX_EMBEDDED_FILE_BYTES를 넘으면 내용 대신
+        안내 문구로 대체하고 truncated=True를 표시해야 한다.
+        """
+        from auditor.analyzers import preprocess as preprocess_module
+
+        monkeypatch.setattr(preprocess_module, "MAX_EMBEDDED_FILE_BYTES", 10)
+        big = tmp_path / "Big.sol"
+        big.write_text("x" * 100)
+
+        manifest = build_source_manifest(big, tmp_path, multi_file=False)
+
+        assert manifest[0]["truncated"] is True
+        assert "x" * 100 not in manifest[0]["content"]
+        assert "너무 커서" in manifest[0]["content"]

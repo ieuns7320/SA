@@ -15,7 +15,6 @@ from fastapi.testclient import TestClient
 from auditor.pipeline_types import PipelineResult
 from auditor.web import db as web_db
 from auditor.web import jobs as job_runner
-from auditor.web import ratelimit
 from auditor.web.app import create_app
 
 FIXTURE = Path(__file__).parent / "fixtures" / "contracts" / "vulnerable_vault.sol"
@@ -28,7 +27,6 @@ VALID_SOL = b'// SPDX-License-Identifier: MIT\npragma solidity ^0.8.19;\ncontrac
 def web_env(tmp_path, monkeypatch):
     monkeypatch.setattr(web_db, "DB_PATH", tmp_path / "jobs.sqlite3")
     monkeypatch.setattr(job_runner, "REPORTS_ROOT", tmp_path / "reports")
-    monkeypatch.setattr(ratelimit, "_hits", {})
     return tmp_path
 
 
@@ -190,7 +188,9 @@ class TestJobSource:
         assert resp.status_code == 200
         body = resp.json()
         assert body["total_findings"] == 1
-        assert body["source_files"] == [{"path": "fake.sol", "content": "contract C {}"}]
+        assert body["source_files"] == [
+            {"path": "fake.sol", "content": "contract C {}", "truncated": False}
+        ]
         finding = body["findings"][0]
         assert finding["check"] == "reentrancy-eth"
         assert finding["start_line"] == 10

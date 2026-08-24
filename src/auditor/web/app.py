@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from auditor import cache
 from auditor.web import db
 from auditor.web.jobs import create_executor
 from auditor.web.routers.jobs import router as jobs_router
@@ -42,6 +43,10 @@ async def lifespan(app: FastAPI):
     stale = db.sweep_stale_jobs()
     if stale:
         logger.info("이전 실행에서 멈춘 job %d개를 failed로 정리했습니다.", stale)
+    expired_cache = cache.sweep_expired()
+    if expired_cache:
+        logger.info("만료된 파이프라인 캐시 %d개를 정리했습니다.", expired_cache)
+    db.sweep_old_rate_limit_hits()
     app.state.executor = create_executor(MAX_CONCURRENT_JOBS)
     yield
     app.state.executor.shutdown(wait=False)

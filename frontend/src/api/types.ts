@@ -34,6 +34,7 @@ export interface FindingOut {
 export interface SourceFileOut {
   path: string;
   content: string;
+  truncated: boolean;
 }
 
 export interface AnnotatedSourceResponse {

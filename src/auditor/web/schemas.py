@@ -37,6 +37,7 @@ class FindingOut(BaseModel):
 class SourceFileOut(BaseModel):
     path: str
     content: str
+    truncated: bool = False
 
 
 class AnnotatedSourceResponse(BaseModel):

@@ -61,11 +61,21 @@ def _findings_cache_path(key: str) -> Path:
     return CACHE_ROOT / f"{key}.findings.json"
 
 
+def _delete_entry(key: str) -> None:
+    for path in (_meta_path(key), _report_cache_path(key), _findings_cache_path(key)):
+        path.unlink(missing_ok=True)
+
+
 def load(key: str, dest_dir: Path) -> PipelineResult | None:
     """
     캐시가 존재하고 TTL 이내면 report.md/findings.json 둘 다 dest_dir로 복사하고
     PipelineResult를 반환한다. 캐시가 없거나(둘 중 하나라도 없으면 미스로 취급)
     만료됐으면 None — 호출자는 평소대로 새로 분석하면 된다.
+
+    만료되었거나 손상된(meta.json 파싱 실패) 엔트리는 이 시점에 디스크에서
+    지운다 — 안 지우면 같은 키가 다시는 조회되지 않는 한 report.md/findings.json이
+    영원히 CACHE_ROOT에 남아 디스크를 계속 잡아먹는다. 한 번도 재조회되지 않는
+    엔트리까지 정리하는 건 sweep_expired()가 담당한다(웹 서버 시작 시 호출).
     """
     meta_path = _meta_path(key)
     report_cache_path = _report_cache_path(key)
@@ -76,10 +86,12 @@ def load(key: str, dest_dir: Path) -> PipelineResult | None:
     try:
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
+        _delete_entry(key)
         return None
 
     age = time.time() - meta.get("cached_at", 0)
     if age > TTL_SECONDS:
+        _delete_entry(key)
         return None
 
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -89,6 +101,29 @@ def load(key: str, dest_dir: Path) -> PipelineResult | None:
     shutil.copy2(findings_cache_path, findings_dest)
     logger.info("캐시 히트 (%.0f초 전 결과, target=%s)", age, meta.get("target_display"))
     return PipelineResult(report_path=report_dest, findings_path=findings_dest)
+
+
+def sweep_expired() -> int:
+    """CACHE_ROOT를 훑어서 TTL이 지난(또는 손상된) 엔트리를 전부 지운다.
+    load()의 정리는 그 키가 다시 조회될 때만 일어나므로, 한 번도 재조회되지
+    않는 엔트리는 이걸로만 정리된다. 반환값은 지운 엔트리 수 — 웹 서버 시작
+    시(lifespan) 호출한다."""
+    if not CACHE_ROOT.exists():
+        return 0
+
+    now = time.time()
+    removed = 0
+    for meta_path in CACHE_ROOT.glob("*.meta.json"):
+        key = meta_path.name.removesuffix(".meta.json")
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            expired = (now - meta.get("cached_at", 0)) > TTL_SECONDS
+        except (OSError, json.JSONDecodeError):
+            expired = True
+        if expired:
+            _delete_entry(key)
+            removed += 1
+    return removed
 
 
 def store(key: str, report_path: Path, findings_path: Path, target_display: str) -> None:
