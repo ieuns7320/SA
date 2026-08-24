@@ -1,0 +1,103 @@
+:root {
+  --bg: #0a0b0f;
+  --bg-elevated: #13151c;
+  --bg-elevated-2: #191c26;
+  --border: #242732;
+  --border-strong: #343a4c;
+  --text: #eceef2;
+  --text-muted: #8b93a7;
+  --text-faint: #5b6272;
+
+  --accent: #8b7cf6;
+  --accent-hover: #7a6af0;
+  --accent-soft: rgba(139, 124, 246, 0.14);
+
+  --success: #34d399;
+  --success-soft: rgba(52, 211, 153, 0.14);
+  --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.14);
+  --error: #fb7185;
+  --error-soft: rgba(251, 113, 133, 0.14);
+
+  --code-bg: #0d0f15;
+  --code-text: #c9d1e0;
+  --shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Pretendard, sans-serif;
+  line-height: 1.6;
+  color-scheme: dark;
+}
+
+/* 라이트 모드 — Header의 토글이 <html data-theme="light">을 세팅한다
+   (src/theme.ts). 다크 팔레트와 같은 accent/success/warning/error 색상 계열을
+   유지하되, 흰 배경에서 충분한 대비를 갖도록 더 진한 톤을 쓴다. */
+:root[data-theme="light"] {
+  --bg: #f6f7fb;
+  --bg-elevated: #ffffff;
+  --bg-elevated-2: #eef0f6;
+  --border: #e1e3ec;
+  --border-strong: #c9cce0;
+  --text: #1a1c27;
+  --text-muted: #565b70;
+  --text-faint: #83879c;
+
+  --accent: #6d4fe0;
+  --accent-hover: #5c3fd0;
+  --accent-soft: rgba(109, 79, 224, 0.1);
+
+  --success: #159862;
+  --success-soft: rgba(21, 152, 98, 0.12);
+  --warning: #b45309;
+  --warning-soft: rgba(180, 83, 9, 0.12);
+  --error: #dc2626;
+  --error-soft: rgba(220, 38, 38, 0.1);
+
+  --code-bg: #f1f2f8;
+  --code-text: #334155;
+  --shadow: 0 12px 32px rgba(30, 32, 48, 0.1);
+
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(900px 480px at 15% -10%, rgba(139, 124, 246, 0.16), transparent 60%),
+    radial-gradient(700px 420px at 100% 0%, rgba(52, 211, 153, 0.08), transparent 55%),
+    var(--bg);
+  background-attachment: fixed;
+  color: var(--text);
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+code,
+pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}

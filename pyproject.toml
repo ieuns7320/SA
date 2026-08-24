@@ -1,0 +1,45 @@
+[project]
+name = "llm-contract-auditor"
+version = "0.1.0"
+description = "Slither 정적분석 기반 Web3 스마트컨트랙트 보안 리포트 생성 도구 (LLM 미사용)"
+requires-python = ">=3.11"
+dependencies = [
+    "slither-analyzer>=0.10",
+    "requests>=2.31",
+    "python-dotenv>=1.0",
+    # slither-analyzer의 전이 의존성으로 이미 설치되지만, slither_runner.py가
+    # solc_select.solc_select.artifact_path()를 직접 import해서 쓰므로 명시적
+    # 직접 의존성으로 승격한다.
+    "solc-select>=1.0",
+]
+
+[project.optional-dependencies]
+# 2단계(보류): RAG / LLM 판단 레이어를 다시 붙일 때 사용.
+# 임베딩은 로컬 모델(sentence-transformers)만 사용한다 — API 과금 발생 방지.
+rag = [
+    "chromadb>=0.5",
+    "sentence-transformers>=3.0",
+]
+# 웹 UI 백엔드 (FastAPI). LLM 호출은 없음 — 기존 파이프라인을 감싸는 API 레이어일 뿐.
+web = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "python-multipart>=0.0.9",
+]
+# 개발/테스트
+dev = [
+    "pytest>=8.0",
+    "pytest-cov",
+    "ruff",
+    "httpx>=0.27",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/auditor"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

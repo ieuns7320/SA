@@ -1,0 +1,608 @@
+{
+  "reentrancy-eth": {
+    "title": "재진입 공격 (Reentrancy)",
+    "explanation": "외부 컨트랙트를 호출한 뒤에 상태 변수(잔액 등)를 갱신하고 있습니다. 공격자가 호출을 가로채 같은 함수를 재귀적으로 다시 호출하면, 잔액이 차감되기 전에 여러 번 인출할 수 있습니다.",
+    "remediation": "checks-effects-interactions 패턴을 적용하세요: require 체크 → 상태 변수 갱신 → 외부 호출 순서로 바꾸거나, nonReentrant 가드(OpenZeppelin ReentrancyGuard)를 추가하세요.",
+    "default_severity": "Critical"
+  },
+  "arbitrary-send-eth": {
+    "title": "임의 주소로 ETH 전송",
+    "explanation": "검증되지 않은 주소로 ETH를 전송할 수 있는 코드입니다. 접근 제어나 주소 검증이 없다면 공격자가 자금을 임의로 인출할 수 있습니다.",
+    "remediation": "전송 대상 주소가 신뢰할 수 있는지 확인하고, 해당 함수에 적절한 접근 제어(onlyOwner 등)를 추가하세요.",
+    "default_severity": "High"
+  },
+  "tx-origin": {
+    "title": "tx.origin을 이용한 인증",
+    "explanation": "tx.origin으로 권한을 확인하고 있습니다. 사용자가 악성 컨트랙트와 상호작용하면, 그 컨트랙트가 사용자를 대신해 이 함수를 호출해 인증을 우회(피싱)할 수 있습니다.",
+    "remediation": "tx.origin 대신 msg.sender로 인증하세요.",
+    "default_severity": "High"
+  },
+  "missing-zero-check": {
+    "title": "주소 0값 검증 누락",
+    "explanation": "주소를 상태 변수에 대입하기 전에 0 주소(0x0)인지 확인하지 않습니다. 실수로 0 주소가 들어가면 컨트랙트가 영구적으로 잠기거나 자금을 잃을 수 있습니다.",
+    "remediation": "require(addr != address(0), \"...\") 검증을 추가하세요.",
+    "default_severity": "Low"
+  },
+  "unprotected-upgrade": {
+    "title": "보호되지 않은 업그레이드 함수",
+    "explanation": "프록시 컨트랙트의 구현체를 교체하는 함수에 접근 제어가 없습니다. 누구나 컨트랙트 로직을 임의로 바꿔치기할 수 있는 치명적 취약점입니다.",
+    "remediation": "onlyOwner 등 접근 제어자를 추가하고, 가능하면 타임락/멀티시그를 결합하세요.",
+    "default_severity": "Critical"
+  },
+  "unchecked-transfer": {
+    "title": "반환값 미검증 토큰 전송",
+    "explanation": "ERC20 transfer/transferFrom의 반환값을 확인하지 않습니다. 일부 토큰은 실패 시 revert 대신 false를 반환하는데, 이를 무시하면 실패한 전송을 성공으로 착각할 수 있습니다.",
+    "remediation": "반환값을 require로 검증하거나 OpenZeppelin의 SafeERC20을 사용하세요.",
+    "default_severity": "Medium"
+  },
+  "uninitialized-state": {
+    "title": "초기화되지 않은 상태 변수",
+    "explanation": "상태 변수가 초기화되지 않은 채 사용되고 있습니다. 기본값(0, false 등)이 의도한 값과 다르면 로직 오류로 이어질 수 있습니다.",
+    "remediation": "생성자나 초기화 함수에서 해당 변수를 명시적으로 설정하세요.",
+    "default_severity": "Medium"
+  },
+  "controlled-delegatecall": {
+    "title": "제어 가능한 delegatecall 대상",
+    "explanation": "사용자 입력으로 delegatecall 대상 주소가 결정됩니다. 공격자가 악성 컨트랙트 주소를 넘기면 호출 컨트랙트의 저장소를 임의로 조작할 수 있습니다.",
+    "remediation": "delegatecall 대상을 화이트리스트로 제한하거나, 신뢰할 수 있는 고정 주소만 사용하세요.",
+    "default_severity": "Critical"
+  },
+  "timestamp": {
+    "title": "블록 타임스탬프 의존",
+    "explanation": "block.timestamp를 조건 판단에 사용합니다. 채굴자가 어느 정도 타임스탬프를 조작할 수 있어, 그 값에 크게 의존하는 로직(추첨, 만료 등)은 악용될 수 있습니다.",
+    "remediation": "정밀한 시간 비교가 필요하다면 오라클을 쓰거나, 허용 오차 범위를 두어 설계하세요.",
+    "default_severity": "Low"
+  },
+  "low-level-calls": {
+    "title": "저수준 호출 사용",
+    "explanation": "call/delegatecall/staticcall 같은 저수준 호출은 타입 검사가 없어 실수하기 쉽습니다. 그 자체로 취약점은 아니지만 주의 깊게 검토가 필요합니다.",
+    "remediation": "가능하면 인터페이스를 통한 명시적 호출을 사용하고, 저수준 호출의 반환값은 항상 확인하세요.",
+    "default_severity": "Informational"
+  },
+  "solc-version": {
+    "title": "컴파일러 버전 관련 알려진 이슈",
+    "explanation": "사용 중인 solc 버전에 알려진 버그가 있을 수 있습니다.",
+    "remediation": "가능하면 최신 안정 버전의 solc로 고정하세요.",
+    "default_severity": "Informational"
+  },
+  "arbitrary-send-erc20": {
+    "title": "임의 주소로부터 ERC20 인출",
+    "explanation": "transferFrom을 호출할 때 from 주소가 검증 없이 외부 입력으로 결정됩니다. 공격자가 다른 사용자의 토큰 승인(allowance)을 자신에게 유리하게 이용할 수 있습니다.",
+    "remediation": "from이 msg.sender와 일치하는지, 또는 명시적으로 승인받은 주소인지 검증하세요.",
+    "default_severity": "High"
+  },
+  "suicidal": {
+    "title": "접근 제어 없는 self-destruct",
+    "explanation": "누구나 호출해서 컨트랙트를 파괴(selfdestruct)할 수 있는 함수입니다. 컨트랙트에 남은 자금이 모두 유실될 수 있습니다.",
+    "remediation": "selfdestruct 호출 함수에 반드시 접근 제어(onlyOwner 등)를 추가하세요.",
+    "default_severity": "Critical"
+  },
+  "shadowing-state": {
+    "title": "상태 변수 섀도잉",
+    "explanation": "상속 관계에서 자식 컨트랙트의 상태 변수가 부모의 변수와 이름이 같아 의도치 않게 가려집니다. 어떤 변수가 실제로 갱신되는지 혼란을 일으켜 로직 오류로 이어질 수 있습니다.",
+    "remediation": "변수명을 겹치지 않게 바꾸거나, 부모의 변수를 명시적으로 재사용하세요.",
+    "default_severity": "High"
+  },
+  "uninitialized-storage": {
+    "title": "초기화되지 않은 storage 포인터",
+    "explanation": "storage로 선언된 지역 변수가 초기화되지 않았습니다. 의도와 다른 storage 슬롯을 가리켜 예기치 않은 상태 변경을 일으킬 수 있는 심각한 버그입니다.",
+    "remediation": "storage 변수는 반드시 명시적으로 초기화하거나 memory로 선언하세요.",
+    "default_severity": "High"
+  },
+  "reentrancy-no-eth": {
+    "title": "재진입 취약점 (ETH 탈취는 아님)",
+    "explanation": "외부 호출 이후 상태를 변경하는 재진입 패턴이지만, 직접적인 ETH 탈취로 이어지진 않습니다. 다만 상태 불일치나 다른 로직 오류로 악용될 수 있습니다.",
+    "remediation": "checks-effects-interactions 패턴을 적용하거나 nonReentrant 가드를 추가하세요.",
+    "default_severity": "Medium"
+  },
+  "reentrancy-benign": {
+    "title": "경미한 재진입 패턴",
+    "explanation": "재진입이 가능한 구조이지만 자금 손실로 이어지지 않는 경미한 경우입니다. 그래도 향후 코드 변경 시 취약점이 될 수 있어 검토가 권장됩니다.",
+    "remediation": "당장 위험하지 않더라도 checks-effects-interactions 패턴을 적용해두는 것이 안전합니다.",
+    "default_severity": "Low"
+  },
+  "reentrancy-events": {
+    "title": "재진입으로 인한 이벤트 순서 뒤바뀜",
+    "explanation": "재진입이 발생하면 이벤트가 실제 상태 변경 순서와 다르게 기록될 수 있습니다. 이벤트를 신뢰하는 오프체인 시스템(인덱서 등)이 잘못된 순서로 데이터를 해석할 위험이 있습니다.",
+    "remediation": "상태 변경 직후 이벤트를 발생시키도록 순서를 맞추거나 nonReentrant 가드를 추가하세요.",
+    "default_severity": "Low"
+  },
+  "unchecked-lowlevel": {
+    "title": "반환값 미검증 저수준 호출",
+    "explanation": "call/send 같은 저수준 호출의 성공 여부(반환값)를 확인하지 않습니다. 호출이 실패해도 트랜잭션이 계속 진행되어 잘못된 상태로 이어질 수 있습니다.",
+    "remediation": "저수준 호출의 반환값(bool success)을 반드시 확인하고 실패 시 revert 하세요.",
+    "default_severity": "Medium"
+  },
+  "unchecked-send": {
+    "title": "반환값 미검증 send",
+    "explanation": "address.send()의 반환값을 확인하지 않습니다. send는 실패해도 예외를 던지지 않고 false를 반환하므로, 확인하지 않으면 전송 실패를 놓칠 수 있습니다.",
+    "remediation": "반환값을 require로 검증하거나 call{value:}(\"\") 패턴 + 반환값 검증으로 대체하세요.",
+    "default_severity": "Medium"
+  },
+  "uninitialized-local": {
+    "title": "초기화되지 않은 지역 변수",
+    "explanation": "지역 변수가 초기화 없이 사용됩니다. 기본값이 의도와 다르면 로직 오류로 이어질 수 있습니다.",
+    "remediation": "사용 전에 변수를 명시적으로 초기화하세요.",
+    "default_severity": "Medium"
+  },
+  "unused-return": {
+    "title": "반환값 미사용",
+    "explanation": "함수 호출의 반환값을 사용하지 않고 버립니다. 특히 외부 호출의 성공/실패 여부를 담은 반환값이라면 중요한 정보를 놓치는 것일 수 있습니다.",
+    "remediation": "반환값이 상태(성공 여부 등)를 담고 있다면 반드시 확인하는 로직을 추가하세요.",
+    "default_severity": "Medium"
+  },
+  "divide-before-multiply": {
+    "title": "나눗셈 후 곱셈으로 인한 정밀도 손실",
+    "explanation": "나눗셈을 먼저 수행한 뒤 곱셈을 하고 있습니다. Solidity는 정수 연산만 지원하므로 나눗셈에서 소수점이 버려져 계산 결과가 부정확해질 수 있습니다.",
+    "remediation": "가능하면 곱셈을 먼저 수행한 뒤 나눗셈을 적용하는 순서로 바꾸세요.",
+    "default_severity": "Medium"
+  },
+  "incorrect-equality": {
+    "title": "위험한 엄격한 동등 비교",
+    "explanation": "잔액 등을 == 로 정확히 비교하고 있습니다. 공격자가 예상치 못한 방식(예: 강제 ETH 전송)으로 값을 미세하게 바꾸면 이 조건이 영원히 참/거짓이 되어 로직이 마비될 수 있습니다.",
+    "remediation": "정확한 동등 비교 대신 >=, <= 등 범위 비교를 사용하세요.",
+    "default_severity": "Medium"
+  },
+  "locked-ether": {
+    "title": "잠긴 ETH (인출 함수 없음)",
+    "explanation": "컨트랙트가 ETH를 받을 수는 있지만 인출할 수 있는 함수가 없습니다. 이 상태로 배포되면 들어온 ETH가 영구히 잠깁니다.",
+    "remediation": "ETH를 받는 컨트랙트라면 반드시 인출 함수를 함께 구현하세요.",
+    "default_severity": "Medium"
+  },
+  "weak-prng": {
+    "title": "취약한 난수 생성",
+    "explanation": "block.timestamp, blockhash 등 예측 가능하거나 채굴자가 조작 가능한 값으로 난수를 생성합니다. 추첨, 복권 등의 로직이라면 결과를 예측하거나 조작당할 수 있습니다.",
+    "remediation": "Chainlink VRF 같은 검증 가능한 난수 오라클을 사용하세요.",
+    "default_severity": "High"
+  },
+  "boolean-cst": {
+    "title": "불리언 상수 오용",
+    "explanation": "true/false를 불필요하게 비교하거나 조건식에 상수를 그대로 사용하는 등, 항상 같은 결과가 나오는 코드입니다. 의도한 로직이 아닐 가능성이 있습니다.",
+    "remediation": "조건식을 단순화하거나 의도한 로직으로 수정하세요.",
+    "default_severity": "Medium"
+  },
+  "tautology": {
+    "title": "항상 참/거짓인 조건식",
+    "explanation": "조건식이 변수 값과 무관하게 항상 참이거나 항상 거짓입니다. 의도한 검증 로직이 실제로는 작동하지 않고 있을 가능성이 높습니다.",
+    "remediation": "조건식의 로직을 다시 검토해서 실제로 검증하려는 조건으로 수정하세요.",
+    "default_severity": "Medium"
+  },
+  "events-access": {
+    "title": "접근 제어 함수의 이벤트 누락",
+    "explanation": "owner 변경처럼 민감한 상태를 바꾸는 함수인데 이벤트를 발생시키지 않습니다. 오프체인에서 이런 변경을 추적/감시하기 어려워집니다.",
+    "remediation": "민감한 상태 변경 시 emit으로 이벤트를 발생시켜 추적 가능하게 만드세요.",
+    "default_severity": "Low"
+  },
+  "events-maths": {
+    "title": "수치 변경 함수의 이벤트 누락",
+    "explanation": "중요한 수치(수수료율, 한도 등)를 변경하는 함수인데 이벤트를 발생시키지 않습니다.",
+    "remediation": "수치 변경 시 emit으로 이벤트를 발생시켜 추적 가능하게 만드세요.",
+    "default_severity": "Low"
+  },
+  "shadowing-local": {
+    "title": "지역 변수 섀도잉",
+    "explanation": "지역 변수가 상태 변수나 상위 스코프 변수와 이름이 같아 가려집니다. 실수로 의도한 변수 대신 지역 변수를 참조하게 될 수 있습니다.",
+    "remediation": "변수명을 겹치지 않게 바꾸세요.",
+    "default_severity": "Low"
+  },
+  "shadowing-builtin": {
+    "title": "내장 심볼 섀도잉",
+    "explanation": "now, msg 같은 Solidity 내장 심볼과 같은 이름을 변수/함수에 사용하고 있습니다. 가독성을 해치고 실수를 유발할 수 있습니다.",
+    "remediation": "내장 심볼과 겹치지 않는 이름으로 변경하세요.",
+    "default_severity": "Low"
+  },
+  "calls-loop": {
+    "title": "반복문 내 다중 외부 호출",
+    "explanation": "for/while 반복문 안에서 외부 호출을 여러 번 수행합니다. 가스 소모가 커질 뿐 아니라, 반복 중 하나의 호출이 재진입을 유발하면 예상치 못한 상태가 될 수 있습니다.",
+    "remediation": "반복 횟수에 상한을 두거나, 외부 호출을 배치 처리 패턴으로 분리하세요.",
+    "default_severity": "Low"
+  },
+  "incorrect-modifier": {
+    "title": "기본값을 반환할 수 있는 modifier",
+    "explanation": "modifier 안에 return이나 revert 없이 끝나는 경로가 있어, 검증을 통과하지 못해도 함수가 기본값으로 계속 진행될 수 있습니다.",
+    "remediation": "modifier의 모든 경로가 명시적으로 revert하거나 _;로 진행하도록 검토하세요.",
+    "default_severity": "Low"
+  },
+  "deprecated-standards": {
+    "title": "지원 종료된 Solidity 문법 사용",
+    "explanation": "throw, sha3, suicide 등 더 이상 권장되지 않는 구식 문법을 사용하고 있습니다. 최신 컴파일러에서 제거되었거나 의미가 달라질 수 있습니다.",
+    "remediation": "revert, keccak256, selfdestruct 등 현재 권장되는 대체 문법으로 바꾸세요.",
+    "default_severity": "Informational"
+  },
+  "naming-convention": {
+    "title": "명명 규칙 미준수",
+    "explanation": "Solidity 표준 명명 규칙(함수/변수는 camelCase, 컨트랙트는 PascalCase 등)을 따르지 않습니다. 기능적 문제는 아니지만 가독성과 협업에 영향을 줍니다.",
+    "remediation": "팀 컨벤션 또는 Solidity 스타일 가이드에 맞춰 이름을 통일하세요.",
+    "default_severity": "Informational"
+  },
+  "abiencoderv2-array": {
+    "title": "ABIEncoderV2 스토리지 배열 컴파일러 버그",
+    "explanation": "특정 구버전 solc(0.5.10 미만 등)에서 ABIEncoderV2를 쓸 때 다차원 스토리지 배열/구조체 배열이 잘못된 스토리지 슬롯에 쓰여지는 컴파일러 버그입니다. 데이터 손상으로 이어질 수 있습니다.",
+    "remediation": "solc를 해당 버그가 패치된 최신 버전으로 올리세요.",
+    "default_severity": "High"
+  },
+  "array-by-reference": {
+    "title": "배열/구조체 값 복사 시 참조 착각",
+    "explanation": "storage 배열이나 구조체를 memory로 복사한 뒤 수정하면 원본 storage 데이터에는 반영되지 않습니다. 참조로 착각하고 수정 결과가 저장됐다고 가정하면 로직 오류가 발생합니다.",
+    "remediation": "storage에 실제로 반영하려면 storage 키워드로 참조를 받거나, 수정 후 명시적으로 다시 저장하세요.",
+    "default_severity": "High"
+  },
+  "encode-packed-collision": {
+    "title": "abi.encodePacked 해시 충돌",
+    "explanation": "가변 길이 타입(string, bytes, 동적 배열) 여러 개를 abi.encodePacked로 이어붙이면 서로 다른 입력이 동일한 바이트열로 인코딩될 수 있습니다. 이 값을 해시(예: 서명 검증)에 쓰면 값이 다른 두 입력이 같은 서명/해시로 인정되는 충돌이 발생할 수 있습니다.",
+    "remediation": "가변 길이 인자가 2개 이상이면 abi.encode를 대신 쓰거나, 각 인자 사이에 구분자를 넣으세요.",
+    "default_severity": "High"
+  },
+  "incorrect-shift": {
+    "title": "shift 연산자 인자 순서 오류",
+    "explanation": "인라인 어셈블리에서 shl/shr/sar 명령의 인자 순서가 뒤바뀌어 있습니다(shift량과 값의 위치가 반대). 의도한 것과 완전히 다른 결과가 계산됩니다.",
+    "remediation": "shl(shift, value) / shr(shift, value) 순서(shift량이 먼저)를 확인하고 고치세요.",
+    "default_severity": "High"
+  },
+  "msg-value-in-nonpayable": {
+    "title": "payable 진입점 없이 쓰인 msg.value",
+    "explanation": "msg.value를 참조하는 함수가 payable 진입점을 거치지 않고는 호출될 수 없는 경로에 있습니다. 이런 코드는 항상 0이 반환되거나, 상속 구조에 따라 컴파일이 아예 안 될 수도 있어 의도한 로직이 동작하지 않습니다.",
+    "remediation": "msg.value를 쓰는 함수가 실제로 payable 호출 경로에서 실행되는지 상속/호출 그래프를 확인하세요.",
+    "default_severity": "High"
+  },
+  "multiple-constructors": {
+    "title": "생성자 정의 방식 혼용",
+    "explanation": "구버전(컨트랙트명과 동일한 함수명)과 신버전(constructor 키워드) 생성자 문법이 한 컨트랙트에 함께 있습니다. 컴파일러가 어느 쪽을 실제 생성자로 채택하는지 혼동될 수 있고, 의도한 초기화 로직이 실행되지 않을 수 있습니다.",
+    "remediation": "constructor 키워드만 사용하고 구버전 문법은 제거하세요.",
+    "default_severity": "High"
+  },
+  "name-reused": {
+    "title": "동일한 컨트랙트/인터페이스 이름 재사용",
+    "explanation": "같은 이름의 컨트랙트가 여러 파일에 정의되어 있습니다. 컴파일 시 어느 정의가 실제로 쓰이는지 애매해질 수 있고, import 방식에 따라 의도하지 않은 컨트랙트가 링크될 위험이 있습니다.",
+    "remediation": "컨트랙트/인터페이스 이름을 프로젝트 전체에서 고유하게 바꾸세요.",
+    "default_severity": "High"
+  },
+  "protected-vars": {
+    "title": "보호되지 않은 민감 변수",
+    "explanation": "민감한 상태 변수(권한, 소유자 등으로 추정되는 변수)를 수정하는 함수에 접근 제어가 없습니다. 누구나 값을 바꿀 수 있어 권한 탈취로 이어질 수 있습니다.",
+    "remediation": "해당 변수를 수정하는 함수에 onlyOwner 등 접근 제어자를 추가하세요.",
+    "default_severity": "Critical"
+  },
+  "public-mappings-nested": {
+    "title": "중첩 구조를 가진 public 매핑",
+    "explanation": "구조체나 배열을 값으로 갖는 public 매핑을 오래된 solc 버전으로 컴파일하면 자동 생성되는 getter가 실패하거나 컴파일 자체가 안 될 수 있는 알려진 컴파일러 이슈입니다.",
+    "remediation": "solc를 최신 버전으로 올리거나, 명시적으로 getter 함수를 직접 작성하세요.",
+    "default_severity": "Medium"
+  },
+  "rtlo": {
+    "title": "RTLO(오른쪽에서 왼쪽 재정렬) 제어 문자 사용",
+    "explanation": "소스코드에 유니코드 RTLO 제어 문자(U+202E)가 포함되어 있습니다. 코드 에디터/터미널에서 문자 표시 순서를 조작해, 실제 코드와 다르게 보이도록 속이는 데 악용될 수 있습니다(눈속임 백도어).",
+    "remediation": "RTLO 문자를 포함한 코드를 제거하고 왜 들어갔는지 원인을 확인하세요. 의도적으로 삽입됐다면 심각한 보안 사고입니다.",
+    "default_severity": "Critical"
+  },
+  "arbitrary-send-erc20-permit": {
+    "title": "permit과 결합된 임의 주소발 토큰 전송",
+    "explanation": "ERC20 permit(서명 기반 승인)과 transferFrom을 함께 쓰면서 from 주소를 호출자가 임의로 지정할 수 있습니다. 공격자가 다른 사용자의 서명을 재사용하거나 결합해 그 사용자 자금을 임의로 전송시킬 수 있습니다.",
+    "remediation": "from이 msg.sender와 일치하는지, 혹은 서명이 실제로 그 사용자 것인지 반드시 검증하세요.",
+    "default_severity": "High"
+  },
+  "controlled-array-length": {
+    "title": "외부 입력으로 조작 가능한 배열 length",
+    "explanation": "배열의 length 슬롯에 검증되지 않은 외부 입력값을 직접 대입하고 있습니다. 스토리지 배열의 length를 임의로 늘리면 다른 스토리지 슬롯을 덮어쓰는 것처럼 해석되어 심각한 데이터 손상/탈취로 이어질 수 있습니다.",
+    "remediation": "배열 length를 직접 대입하지 말고 push/pop 등 안전한 배열 연산만 사용하세요.",
+    "default_severity": "High"
+  },
+  "delegatecall-loop": {
+    "title": "루프 안에서의 payable delegatecall",
+    "explanation": "payable 함수의 반복문 안에서 delegatecall을 호출하고 있습니다. delegatecall은 호출된 컨트랙트가 msg.value를 재사용/재해석할 수 있어, 반복 호출 시 자금이 의도치 않게 중복 처리되거나 소진될 위험이 있습니다.",
+    "remediation": "delegatecall을 반복문 밖으로 빼거나, ETH를 다루는 로직과 분리하세요.",
+    "default_severity": "High"
+  },
+  "incorrect-exp": {
+    "title": "거듭제곱 연산자 우선순위 오류",
+    "explanation": "거듭제곱(**) 연산이 의도한 것과 다른 우선순위로 계산되고 있습니다(예: 단항 마이너스와의 결합). 결과값이 예상과 크게 달라질 수 있습니다.",
+    "remediation": "괄호로 연산 순서를 명확히 하세요.",
+    "default_severity": "High"
+  },
+  "incorrect-return": {
+    "title": "어셈블리 안에서 잘못 쓰인 return",
+    "explanation": "인라인 어셈블리 안의 return은 Solidity 함수의 return이 아니라 EVM 실행 자체를 즉시 종료시킵니다. 이후에 있는 코드(이벤트 발생, 상태 정리 등)가 전혀 실행되지 않습니다.",
+    "remediation": "어셈블리 블록 안에서 함수를 조기 종료할 의도가 아니라면 return 대신 leave를 사용하세요.",
+    "default_severity": "High"
+  },
+  "msg-value-loop": {
+    "title": "루프 안에서 반복 참조되는 msg.value",
+    "explanation": "msg.value는 트랜잭션 전체에서 한 번만 결정되는 고정값인데, 반복문 안에서 마치 매 반복마다 새로 들어오는 값처럼 사용하고 있습니다. 반복 횟수만큼 같은 금액이 여러 번 처리된 것으로 착각하는 회계 오류로 이어집니다.",
+    "remediation": "msg.value를 루프 진입 전에 한 번만 읽어 총액을 반복 횟수로 나누는 등, 실제 전송된 금액과 로직이 일치하도록 재작성하세요.",
+    "default_severity": "High"
+  },
+  "reentrancy-balance": {
+    "title": "잔액 체크 재진입",
+    "explanation": "외부 호출 이후에 갱신되는 잔액(balance)을, 그 갱신 이전에 조건 판단에 사용하고 있습니다. 재진입 공격 중에는 이 잔액이 최신 값이 아니라서, 실제로는 충족되지 않아야 할 조건을 통과시킬 수 있습니다.",
+    "remediation": "checks-effects-interactions 패턴을 적용해 잔액 갱신을 외부 호출보다 먼저 하세요.",
+    "default_severity": "High"
+  },
+  "return-leave": {
+    "title": "어셈블리 함수에서 return 대신 필요한 leave",
+    "explanation": "인라인 어셈블리의 내부 함수(assembly function) 안에서 return을 쓰면 어셈블리 함수만 빠져나가는 게 아니라 EVM 실행 전체가 종료됩니다. 호출부로 정상적으로 값을 돌려주려던 의도와 다르게 동작합니다.",
+    "remediation": "어셈블리 함수 내부에서는 return 대신 leave를 사용하세요.",
+    "default_severity": "High"
+  },
+  "storage-array": {
+    "title": "부호 있는 정수 스토리지 배열 컴파일러 버그",
+    "explanation": "특정 구버전 solc(0.5.10 미만)에서 부호 있는 정수(int) 스토리지 배열을 다룰 때 값이 잘못 저장되는 컴파일러 버그가 있습니다.",
+    "remediation": "solc를 해당 버그가 패치된 버전 이상으로 올리세요.",
+    "default_severity": "High"
+  },
+  "domain-separator-collision": {
+    "title": "DOMAIN_SEPARATOR() 함수 시그니처 충돌",
+    "explanation": "EIP-2612(permit)의 DOMAIN_SEPARATOR() 셀렉터와 우연히 같은 함수가 정의되어 있습니다. 프록시/라우터가 잘못된 함수를 호출하게 되어 permit 서명 검증이 다른 로직으로 새는 등 예기치 않은 동작을 유발할 수 있습니다.",
+    "remediation": "충돌하는 함수의 이름을 바꾸거나 시그니처를 다르게 조정하세요.",
+    "default_severity": "Medium"
+  },
+  "enum-conversion": {
+    "title": "위험한 enum 타입 변환",
+    "explanation": "정수를 enum으로 변환할 때, 그 정수가 enum에 정의된 범위를 벗어나면 런타임에 예외 없이 잘못된 상태로 해석될 수 있습니다(버전에 따라 동작이 다름).",
+    "remediation": "변환 전에 정수 값이 enum의 유효 범위 안에 있는지 확인하세요.",
+    "default_severity": "Medium"
+  },
+  "erc20-interface": {
+    "title": "ERC20 표준과 다른 인터페이스",
+    "explanation": "선언된 인터페이스의 함수 시그니처(반환 타입 등)가 ERC20 표준과 다릅니다. 이 인터페이스로 실제 토큰과 상호작용하면 ABI 디코딩이 어긋나 호출이 실패하거나 잘못된 값을 읽을 수 있습니다.",
+    "remediation": "인터페이스를 EIP-20 표준 시그니처에 맞게 수정하세요.",
+    "default_severity": "Medium"
+  },
+  "erc721-interface": {
+    "title": "ERC721 표준과 다른 인터페이스",
+    "explanation": "선언된 인터페이스가 ERC721 표준 시그니처와 다릅니다. 마켓플레이스 등 표준을 신뢰하는 외부 컨트랙트와 연동 시 호출 실패나 오동작을 유발할 수 있습니다.",
+    "remediation": "인터페이스를 EIP-721 표준 시그니처에 맞게 수정하세요.",
+    "default_severity": "Medium"
+  },
+  "mapping-deletion": {
+    "title": "매핑을 포함한 구조체의 delete 누락",
+    "explanation": "구조체를 delete할 때, 그 구조체 안에 매핑 타입 필드가 있으면 그 매핑 내용은 지워지지 않습니다(Solidity 자체의 제약). 완전히 초기화됐다고 착각하면 이전 데이터가 남아있는 채로 로직이 진행될 수 있습니다.",
+    "remediation": "매핑 필드는 별도로 각 키를 순회하며 지우거나, 애초에 구조체 안에 매핑을 두지 않는 설계를 고려하세요.",
+    "default_severity": "Medium"
+  },
+  "pyth-deprecated-functions": {
+    "title": "Pyth 지원 중단(deprecated) 함수 사용",
+    "explanation": "Pyth Network 오라클의 지원 중단된 함수를 호출하고 있습니다. 향후 업데이트에서 제거되거나 동작이 바뀔 수 있습니다.",
+    "remediation": "Pyth 공식 문서에서 안내하는 대체 함수로 교체하세요.",
+    "default_severity": "Low"
+  },
+  "pyth-unchecked-confidence": {
+    "title": "Pyth 가격의 신뢰구간(confidence) 미검증",
+    "explanation": "Pyth 오라클 가격을 가져오면서 함께 제공되는 신뢰구간(confidence interval)을 확인하지 않습니다. 변동성이 크거나 신뢰도가 낮은 가격을 그대로 신뢰하면 가격 조작에 취약해질 수 있습니다.",
+    "remediation": "confidence 값이 허용 범위 안인지 확인한 뒤에만 가격을 사용하세요.",
+    "default_severity": "Medium"
+  },
+  "pyth-unchecked-publishtime": {
+    "title": "Pyth 가격의 발행 시각(publishTime) 미검증",
+    "explanation": "Pyth 오라클 가격의 publishTime(가격이 갱신된 시각)을 확인하지 않고 사용합니다. 오래되어 더 이상 유효하지 않은 가격을 최신 가격처럼 사용할 위험이 있습니다.",
+    "remediation": "publishTime이 허용 가능한 최신 범위 안인지 확인한 뒤에만 가격을 사용하세요.",
+    "default_severity": "Medium"
+  },
+  "shadowing-abstract": {
+    "title": "추상 컨트랙트 상태 변수 섀도잉",
+    "explanation": "상속받은 추상 컨트랙트의 상태 변수와 같은 이름의 변수를 하위 컨트랙트에서 다시 선언하고 있습니다. 어느 변수가 실제로 읽고 쓰이는지 혼동되어 로직 오류로 이어질 수 있습니다.",
+    "remediation": "변수 이름을 다르게 하거나, 상위 컨트랙트의 변수를 그대로 재사용하세요.",
+    "default_severity": "Medium"
+  },
+  "tautological-compare": {
+    "title": "자기 자신과 비교(항상 참/거짓)",
+    "explanation": "변수를 자기 자신과 비교하고 있어 결과가 항상 고정된 값(true 또는 false)입니다. 의도한 조건 검사가 실제로는 아무 역할을 하지 않습니다.",
+    "remediation": "비교하려던 대상이 무엇이었는지 확인하고 코드를 수정하세요.",
+    "default_severity": "Medium"
+  },
+  "write-after-write": {
+    "title": "덮어써져서 무의미해진 대입",
+    "explanation": "어떤 변수에 값을 대입한 직후, 그 값을 한 번도 읽지 않고 다시 다른 값으로 덮어씁니다. 첫 번째 대입이 사실상 아무 효과가 없어, 원래 의도한 로직이 아닐 가능성이 큽니다.",
+    "remediation": "불필요한 대입을 제거하거나, 중간값을 실제로 사용해야 하는 로직인지 확인하세요.",
+    "default_severity": "Medium"
+  },
+  "chronicle-unchecked-price": {
+    "title": "Chronicle 오라클 가격 검증 누락",
+    "explanation": "Chronicle 오라클에서 가격을 가져오면서 유효성(성공 여부 등)을 확인하지 않습니다. 실패하거나 비정상적인 값을 정상 가격처럼 사용할 위험이 있습니다.",
+    "remediation": "Chronicle 가격 조회 결과의 유효성을 확인한 뒤에만 사용하세요.",
+    "default_severity": "Medium"
+  },
+  "constant-function-asm": {
+    "title": "어셈블리를 포함한 view/pure 함수",
+    "explanation": "view 또는 pure로 선언된 함수가 인라인 어셈블리를 사용합니다. 어셈블리 안에서는 컴파일러가 상태 변경 여부를 검증할 수 없어, 실제로는 상태를 변경하면서도 겉으로는 조회 함수처럼 보일 수 있습니다.",
+    "remediation": "어셈블리 코드가 실제로 상태를 변경하지 않는지 직접 검토하세요.",
+    "default_severity": "Medium"
+  },
+  "constant-function-state": {
+    "title": "실제로 상태를 바꾸는 view/pure 함수",
+    "explanation": "view 또는 pure로 선언되었지만 실제로는 상태 변수를 수정하는 함수입니다. 컴파일 버전에 따라 컴파일 에러가 나거나, 호출자가 이 함수를 안전한 조회로 오해하고 사용할 수 있습니다.",
+    "remediation": "함수 선언(view/pure)을 실제 동작에 맞게 수정하세요.",
+    "default_severity": "Medium"
+  },
+  "gelato-unprotected-randomness": {
+    "title": "보호되지 않은 Gelato VRF 난수 요청",
+    "explanation": "Gelato VRF의 난수 요청(_requestRandomness)을 호출하는 함수에 접근 제어가 없습니다. 누구나 반복 호출해 요청 비용을 유발하거나 난수 생성 흐름을 조작하는 데 악용할 수 있습니다.",
+    "remediation": "난수를 요청하는 함수에 적절한 접근 제어를 추가하세요.",
+    "default_severity": "Medium"
+  },
+  "out-of-order-retryable": {
+    "title": "순서 보장 없는 Arbitrum 재시도 트랜잭션",
+    "explanation": "Arbitrum의 retryable ticket 여러 개를 순서대로 실행된다고 가정하고 있지만, 실제로는 서로 다른 순서로(또는 일부만) 실행될 수 있습니다. 순서에 의존하는 로직은 예상과 다르게 동작할 수 있습니다.",
+    "remediation": "각 retryable ticket이 독립적으로, 임의 순서로 실행돼도 안전하도록 로직을 설계하세요.",
+    "default_severity": "Medium"
+  },
+  "reused-constructor": {
+    "title": "상속 구조에서 중복 호출되는 생성자",
+    "explanation": "다이아몬드 상속 구조에서 같은 상위 컨트랙트의 생성자가 여러 경로로 두 번 이상 호출될 수 있습니다. 초기화 로직이 중복 실행되어 상태가 예상과 달라질 수 있습니다.",
+    "remediation": "상속 구조를 정리하거나, 생성자 로직이 여러 번 실행돼도 안전한지 확인하세요.",
+    "default_severity": "Medium"
+  },
+  "chainlink-feed-registry": {
+    "title": "Chainlink Feed Registry 사용",
+    "explanation": "Chainlink의 Feed Registry는 이더리움 메인넷에서만 제공되는 기능입니다. 다른 체인에 그대로 배포하면 해당 기능이 존재하지 않아 실패합니다.",
+    "remediation": "메인넷 외 체인에 배포한다면 체인별 고정 price feed 주소를 직접 사용하세요.",
+    "default_severity": "Informational"
+  },
+  "optimism-deprecation": {
+    "title": "지원 중단된 Optimism 프리컴파일/함수 사용",
+    "explanation": "Optimism(OP Stack)에서 더 이상 지원되지 않거나 동작이 바뀐 프리디플로이/함수를 사용하고 있습니다.",
+    "remediation": "Optimism 공식 문서에서 안내하는 최신 대체 방식으로 교체하세요.",
+    "default_severity": "Informational"
+  },
+  "uninitialized-fptr-cst": {
+    "title": "생성자 안의 초기화되지 않은 함수 포인터 호출",
+    "explanation": "생성자 실행 시점에 아직 초기화되지 않은 함수 포인터를 호출하고 있습니다. 예상과 다른 함수(또는 0 주소)가 호출되어 예측 불가능한 동작이나 초기화 실패로 이어질 수 있습니다.",
+    "remediation": "함수 포인터가 생성자 실행 전에 반드시 초기화되도록 코드를 재배치하세요.",
+    "default_severity": "High"
+  },
+  "variable-scope": {
+    "title": "선언 전에 사용된 지역 변수",
+    "explanation": "지역 변수가 실제로 선언되기 전 코드 흐름에서 이미 참조되고 있습니다(같은 이름이 여러 스코프에 걸쳐 있는 경우 등). 의도한 값이 아니라 이전 스코프의 값이나 기본값이 쓰일 수 있습니다.",
+    "remediation": "변수 선언 위치와 스코프를 명확히 정리하세요.",
+    "default_severity": "Low"
+  },
+  "void-cst": {
+    "title": "구현되지 않은 생성자 호출",
+    "explanation": "상속 목록에서 부모 컨트랙트의 생성자를 호출하는 것처럼 작성했지만, 실제로는 아무 효과가 없는(구현이 비어있거나 잘못 연결된) 형태입니다.",
+    "remediation": "부모 생성자가 실제로 의도한 인자와 함께 호출되는지 확인하세요.",
+    "default_severity": "Low"
+  },
+  "incorrect-unary": {
+    "title": "위험한 단항 연산자 사용",
+    "explanation": "'= -' 또는 '= +'처럼 단항 연산자와 대입 연산자가 붙어 있어, 오타로 -=/+=를 의도했는지 단순 부호 반전을 의도했는지 헷갈리는 코드입니다.",
+    "remediation": "의도한 연산자가 무엇인지 확인하고 공백을 넣어 명확히 하세요.",
+    "default_severity": "Low"
+  },
+  "return-bomb": {
+    "title": "리턴 데이터 폭탄(Return Bomb)",
+    "explanation": "저수준 호출(call 등)의 반환 데이터 크기를 제한하지 않고 그대로 받고 있습니다. 악의적인 피호출자가 매우 큰 반환 데이터를 돌려주면, 그걸 복사하는 데만 가스가 소진되어 호출자의 트랜잭션이 실패(DoS)할 수 있습니다.",
+    "remediation": "저수준 호출에는 반환 데이터 크기를 제한하는 방식(예: 어셈블리로 필요한 만큼만 복사)을 사용하세요.",
+    "default_severity": "Medium"
+  },
+  "assembly": {
+    "title": "인라인 어셈블리 사용",
+    "explanation": "인라인 어셈블리(Yul)를 사용하고 있습니다. 그 자체로 취약점은 아니지만, 컴파일러의 안전장치(오버플로우 체크, 타입 검증 등)가 적용되지 않는 저수준 코드라 리뷰 시 더 주의가 필요합니다.",
+    "remediation": "어셈블리 블록이 반드시 필요한지 재검토하고, 필요하다면 각 줄의 의도를 주석으로 남기세요.",
+    "default_severity": "Informational"
+  },
+  "assert-state-change": {
+    "title": "assert 안에서 상태를 변경하는 표현식",
+    "explanation": "assert()의 조건식 안에서 상태를 변경하는 연산(대입 등)을 하고 있습니다. assert는 실패 시 전체를 되돌리므로 이 안에서 일어난 상태 변경에 의존하는 코드는 혼란을 줄 수 있습니다.",
+    "remediation": "상태 변경은 assert 밖에서 먼저 수행하고, assert에는 순수한 조건식만 두세요.",
+    "default_severity": "Informational"
+  },
+  "boolean-equal": {
+    "title": "불리언 상수와의 비교",
+    "explanation": "x == true / x == false처럼 불리언 값을 상수와 비교하고 있습니다. 동작에는 문제가 없지만 x 또는 !x로 쓰는 것이 더 간결하고 관례적입니다.",
+    "remediation": "x == true는 x로, x == false는 !x로 바꾸세요.",
+    "default_severity": "Informational"
+  },
+  "cyclomatic-complexity": {
+    "title": "높은 순환 복잡도(Cyclomatic Complexity)",
+    "explanation": "함수 안의 분기(if/for/while/삼항연산자 등)가 많아 코드 경로가 복잡합니다. 복잡도가 높을수록 테스트로 모든 경로를 검증하기 어렵고, 리뷰어가 놓치는 엣지케이스가 생기기 쉽습니다.",
+    "remediation": "함수를 더 작은 단위로 분리해 각 경로를 독립적으로 테스트할 수 있게 하세요.",
+    "default_severity": "Informational"
+  },
+  "erc20-indexed": {
+    "title": "indexed가 빠진 ERC20 이벤트 파라미터",
+    "explanation": "ERC20 표준의 Transfer/Approval 이벤트에서 관례적으로 indexed로 선언되는 주소 파라미터가 indexed 없이 선언되어 있습니다. 오프체인에서 주소 기준으로 이벤트를 필터링/검색하기 어려워집니다.",
+    "remediation": "Transfer/Approval 이벤트의 주소 파라미터에 indexed를 붙이세요.",
+    "default_severity": "Informational"
+  },
+  "function-init-state": {
+    "title": "함수 호출로 초기화되는 상태 변수",
+    "explanation": "상태 변수의 초기값을 다른 함수의 호출 결과로 설정하고 있습니다. 초기화 순서에 따라 그 함수가 아직 예상한 상태가 아닐 수 있어(다른 상태 변수가 아직 초기화 전이라든지) 예기치 않은 값이 들어갈 수 있습니다.",
+    "remediation": "상태 변수는 상수/리터럴로 초기화하거나, 생성자 안에서 순서를 명확히 제어해 초기화하세요.",
+    "default_severity": "Informational"
+  },
+  "incorrect-using-for": {
+    "title": "적용되지 않는 using-for 선언",
+    "explanation": "using-for로 라이브러리를 특정 타입에 연결했지만, 그 라이브러리에 해당 타입에 맞는 함수가 하나도 없습니다. 실제로는 아무 효과가 없는 선언입니다.",
+    "remediation": "라이브러리 함수 시그니처와 using-for에 지정한 타입이 실제로 맞는지 확인하세요.",
+    "default_severity": "Informational"
+  },
+  "missing-inheritance": {
+    "title": "구현했지만 상속 목록엔 없는 인터페이스",
+    "explanation": "인터페이스가 요구하는 함수들을 전부 구현하고 있지만, 정작 그 인터페이스를 상속 목록에 명시하지 않았습니다. ERC165 등 인터페이스 지원 여부를 상속 관계로 판단하는 외부 코드가 이 컨트랙트를 인식하지 못할 수 있습니다.",
+    "remediation": "실제로 구현한 인터페이스를 상속 목록에 명시하세요.",
+    "default_severity": "Informational"
+  },
+  "pragma": {
+    "title": "일관되지 않은 pragma 버전 지정",
+    "explanation": "프로젝트 내 여러 파일이 서로 다른 solidity 버전 범위를 pragma로 지정하고 있습니다. 파일마다 다른 컴파일러 동작/버그에 노출될 수 있어 일관성이 떨어집니다.",
+    "remediation": "프로젝트 전체에서 동일한 pragma 버전 범위를 쓰도록 통일하세요.",
+    "default_severity": "Informational"
+  },
+  "redundant-statements": {
+    "title": "아무 효과 없는 중복/무의미한 구문",
+    "explanation": "실행돼도 아무 효과가 없는 구문(단순 식별자 참조, 타입 이름만 있는 줄 등)이 있습니다. 대개 오타나 지우다 만 코드의 흔적입니다.",
+    "remediation": "해당 구문을 제거하거나, 원래 의도했던 코드로 완성하세요.",
+    "default_severity": "Informational"
+  },
+  "unimplemented-functions": {
+    "title": "구현되지 않은 인터페이스 함수",
+    "explanation": "상속받은 인터페이스/추상 컨트랙트의 함수 중 일부가 구현되지 않았습니다. 그 결과 이 컨트랙트도 추상 컨트랙트가 되어 직접 배포할 수 없습니다.",
+    "remediation": "배포 가능한 컨트랙트로 만들려면 남은 함수를 모두 구현하세요.",
+    "default_severity": "Informational"
+  },
+  "unindexed-event-address": {
+    "title": "indexed 파라미터가 전혀 없는 주소 포함 이벤트",
+    "explanation": "주소 타입 파라미터를 가진 이벤트인데 indexed로 선언된 파라미터가 하나도 없습니다. 오프체인에서 특정 주소로 이벤트를 필터링하기 어려워집니다.",
+    "remediation": "주소 파라미터를 indexed로 선언하세요(이벤트당 최대 3개까지 가능).",
+    "default_severity": "Informational"
+  },
+  "unused-state": {
+    "title": "사용되지 않는 상태 변수",
+    "explanation": "선언만 되어 있고 어디에서도 읽거나 쓰지 않는 상태 변수입니다. 스토리지 슬롯을 불필요하게 차지하고, 코드를 읽는 사람에게 혼란을 줄 수 있습니다.",
+    "remediation": "실제로 쓰이지 않는다면 제거하세요.",
+    "default_severity": "Informational"
+  },
+  "costly-loop": {
+    "title": "반복문 안의 비용이 큰 연산",
+    "explanation": "스토리지 읽기/쓰기처럼 가스 비용이 큰 연산이 반복문 안에서 매번 실행되고 있습니다. 반복 횟수가 늘어날수록 가스 비용이 선형으로 증가해, 특정 상황에서는 블록 가스 한도를 넘어 트랜잭션 자체가 실패(DoS)할 수 있습니다.",
+    "remediation": "반복문 밖에서 한 번만 읽거나 memory 변수에 캐시한 뒤 반복문이 끝나고 한 번만 저장하세요.",
+    "default_severity": "Medium"
+  },
+  "dead-code": {
+    "title": "어디서도 호출되지 않는 함수",
+    "explanation": "internal/private 함수인데 컨트랙트 내 어디에서도 호출되지 않습니다. 배포 후에는 사용할 수 없는 코드라 컨트랙트 크기만 늘립니다.",
+    "remediation": "실제로 필요 없다면 제거하세요.",
+    "default_severity": "Informational"
+  },
+  "reentrancy-unlimited-gas": {
+    "title": "send/transfer를 통한 재진입 노출",
+    "explanation": "send나 transfer로 ETH를 보내면 2300 가스로 제한되어 일반적으로 재진입이 어렵지만, 향후 가스 비용 변경(EIP)이나 수신자가 프록시/스마트월렛인 경우에는 이 가정이 깨질 수 있습니다.",
+    "remediation": "checks-effects-interactions 패턴과 재진입 가드를 send/transfer에도 동일하게 적용해, 가스 제한에만 의존하지 마세요.",
+    "default_severity": "Low"
+  },
+  "too-many-digits": {
+    "title": "가독성이 떨어지는 숫자 리터럴",
+    "explanation": "자릿수가 많은 숫자를 구분자나 지수 표기 없이 그대로 나열하고 있습니다(예: 1000000000000000000). 자릿수를 세는 과정에서 실수로 0을 하나 빠뜨리거나 더하는 오류가 발생하기 쉽습니다.",
+    "remediation": "1e18처럼 지수 표기를 쓰거나, 언더스코어(1_000_000_000_000_000_000)로 구분하세요.",
+    "default_severity": "Informational"
+  },
+  "cache-array-length": {
+    "title": "매 반복마다 다시 읽는 배열 length",
+    "explanation": "for 루프 조건에서 스토리지 배열의 .length를 매 반복마다 다시 읽고 있습니다. 값이 반복 중 바뀌지 않는다면 불필요하게 가스를 낭비하는 것입니다.",
+    "remediation": "루프 시작 전에 length를 지역 변수에 한 번만 저장해 재사용하세요.",
+    "default_severity": "Informational"
+  },
+  "constable-states": {
+    "title": "constant로 선언 가능한 상태 변수",
+    "explanation": "값이 한 번도 바뀌지 않는 상태 변수가 constant/immutable로 선언되어 있지 않습니다. 일반 상태 변수는 매번 스토리지에서 읽어와 가스를 더 소모합니다.",
+    "remediation": "값이 바뀌지 않는다면 constant(컴파일 타임 상수)나 immutable(생성자에서 한 번만 설정)로 선언하세요.",
+    "default_severity": "Informational"
+  },
+  "external-function": {
+    "title": "external로 선언 가능한 public 함수",
+    "explanation": "컨트랙트 내부에서 this.함수() 형태로 호출되지 않는 public 함수입니다. public 함수는 인자를 memory로 복사하는 반면 external은 calldata를 직접 참조해 가스가 더 적게 듭니다.",
+    "remediation": "내부에서 직접 호출되지 않는다면 external로 바꾸세요.",
+    "default_severity": "Informational"
+  },
+  "immutable-states": {
+    "title": "immutable로 선언 가능한 상태 변수",
+    "explanation": "생성자에서만 값이 설정되고 이후 바뀌지 않는 상태 변수가 immutable로 선언되어 있지 않습니다. 일반 상태 변수는 매번 스토리지에서 읽어와 가스를 더 소모합니다.",
+    "remediation": "생성자에서만 설정되는 값이라면 immutable로 선언하세요.",
+    "default_severity": "Informational"
+  },
+  "var-read-using-this": {
+    "title": "this를 통한 자기 자신의 변수 읽기",
+    "explanation": "컨트랙트가 자신의 public 변수를 this.변수() 형태(외부 호출)로 읽고 있습니다. 내부에서 직접 읽는 것보다 불필요하게 외부 호출(CALL) 가스가 추가로 듭니다.",
+    "remediation": "this.를 빼고 변수를 직접 참조하세요.",
+    "default_severity": "Informational"
+  }
+}
