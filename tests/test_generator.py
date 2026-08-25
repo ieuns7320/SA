@@ -83,7 +83,7 @@ class TestGenerateMarkdownReport:
         }
         report = generate_markdown_report(preprocessed, explanations)
         assert "Vault.sol" in report
-        assert "LLM 판단 없이 자동 생성" in report
+        assert "판단은 하지 않습니다" in report
         assert "재진입" in report
         assert "tx.origin" in report
         assert report.index("재진입") < report.index("tx.origin")

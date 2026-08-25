@@ -24,7 +24,7 @@ def test_full_pipeline_on_vulnerable_vault(tmp_path):
     assert result.report_path.exists()
     content = result.report_path.read_text(encoding="utf-8")
     assert "보안 분석 리포트" in content
-    assert "LLM 판단 없이 자동 생성" in content
+    assert "판단은 하지 않습니다" in content
     assert "재진입" in content or "reentrancy" in content.lower()
 
     assert result.findings_path.exists()

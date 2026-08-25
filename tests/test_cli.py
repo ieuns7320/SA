@@ -37,14 +37,14 @@ class TestResolveInput:
     def test_local_path_is_returned_as_is(self, tmp_path):
         sol = tmp_path / "C.sol"
         sol.write_text("contract C {}")
-        result = resolve_input(str(sol), tmp_path)
+        result = resolve_input(str(sol), tmp_path, is_address=False)
         assert result == sol
 
     def test_address_triggers_fetch(self, monkeypatch, tmp_path):
         fake_fetch = MagicMock(return_value=tmp_path / "Fetched.sol")
         monkeypatch.setattr("auditor.cli.fetch_verified_source", fake_fetch)
         address = "0x" + "a" * 40
-        result = resolve_input(address, tmp_path)
+        result = resolve_input(address, tmp_path, is_address=True)
         fake_fetch.assert_called_once_with(address, output_dir=str(tmp_path))
         assert result == tmp_path / "Fetched.sol"
 

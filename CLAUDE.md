@@ -411,6 +411,36 @@ zero-check 누락 정도만 지적하고 접근 제어 자체의 부재는 잡�
         `test_web_ratelimit.py` sqlite 기반으로 전면 재작성, 신규
         `test_web_session.py`, `test_preprocess.py`의 truncation)로 전체
         스위트 113 → 126개 전부 통과. 프론트엔드 타입체크/린트 통과.
+    - **리팩토링 4건** (사용자가 코드 리뷰를 요청해서 다시 읽고 발견, 새 기능
+      없이 기존 동작만 정리):
+      1. **리포트 본문에 남아있던 "LLM 판단 없이 자동 생성" 문구 제거** —
+         README에서는 이미 LLM 언급을 뺐는데, 실제로 매번 생성되는 리포트
+         본문(사용자가 보는 결과물)에는 그대로 남아있었다. "판단은 하지
+         않습니다 — Slither가 찾은 것을 그대로, 다만 이해하기 쉽게 정리할
+         뿐" 으로 교체해 README와 톤 통일.
+      2. **`preprocess.py`의 `_source_cache` 모듈 전역 dict 제거** — job이
+         끝나도 절대 안 비워지는 메모리 누수였다. 웹 job은 `reports/<job_id>/`
+         처럼 매번 새 경로를 쓰기 때문에 이 캐시가 job 간에는 전혀 재사용도
+         안 되면서(캐시 히트가 안 남) 계속 쌓이기만 했다 — 최근 고친 디스크
+         캐시 무한증식 버그와 같은 종류의 문제가 메모리에서도 있었던 것.
+         `preprocess()` 호출마다 새로 만드는 로컬 dict로 스코프를 좁혀서
+         job이 끝나면 같이 버려지게 함(같은 job 안에서 한 파일에 finding이
+         여러 개일 때 반복 읽기를 피하는 원래 목적은 그대로 유지).
+      3. **finding `id` 충돌 가능성 수정** — `id`가 `{check}-{first_line}`
+         조합이라 파일 경로를 포함하지 않았다. 멀티파일 컨트랙트에서 서로
+         다른 파일이 같은 detector·같은 시작 라인으로 겹치면 `id`가 같아지고,
+         이 `id`가 `CodeViewer.tsx`에서 React `key`로 쓰이기 때문에 Problems
+         목록 클릭 시 엉뚱한 finding으로 스크롤될 수 있었다. `id`에 파일
+         경로를 포함(`{check}-{file_label}-{first_line}`)해 해결.
+      4. **`cli.py::run_pipeline`의 정규식 3중 매치 정리** — `ADDRESS_PATTERN.
+         match(target)`이 `_cache_key_for_target`/`resolve_input`/
+         `run_pipeline` 세 곳에서 각각 독립적으로 호출되던 걸 `is_address`
+         한 번만 계산해서 인자로 넘기도록 정리(`resolve_input`/
+         `_cache_key_for_target` 시그니처 변경, `test_cli.py` 호출부 갱신).
+      - `test_generator.py`/`test_pipeline_integration.py`의 리포트 문구
+        검증 갱신, `test_preprocess.py` 관련 회귀 없음 확인. 전체 스위트
+        126개 그대로 전부 통과(신규 테스트 없음 — 동작을 바꾸지 않는 순수
+        리팩토링).
   - 다음 할 일: 패키지 import remapping 지원, 로컬 파일 입력의 멀티파일 지원.
     그 외 실사용 개선 백로그(아직 미착수): CI 파이프라인 없음(사용자가 나중에
     따로 하기로 함), CLI 옵션 빈약(`chain_id` 등 미노출), 프론트엔드 테스트

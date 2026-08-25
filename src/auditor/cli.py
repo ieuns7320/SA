@@ -26,22 +26,22 @@ logger = logging.getLogger(__name__)
 ADDRESS_PATTERN = re.compile(r"^0x[a-fA-F0-9]{40}$")
 
 
-def resolve_input(target: str, work_dir: Path) -> Path:
+def resolve_input(target: str, work_dir: Path, is_address: bool) -> Path:
     """target이 주소면 소스를 받아오고, 파일 경로면 그대로 반환한다."""
-    if ADDRESS_PATTERN.match(target):
+    if is_address:
         logger.info("[1/3] 컨트랙트 주소 감지 — Etherscan에서 소스코드 조회 중: %s", target)
         return fetch_verified_source(target, output_dir=str(work_dir))
     logger.info("[1/3] 로컬 파일 사용: %s", target)
     return Path(target)
 
 
-def _cache_key_for_target(target: str) -> str | None:
+def _cache_key_for_target(target: str, is_address: bool) -> str | None:
     """
     캐시 키를 계산한다. 주소는 (chain_id, 주소) 조합, 로컬 파일은 내용 해시.
     아직 존재하지 않는 파일(잘못된 경로)이면 None을 반환해 캐시를 건너뛰고,
     이후 resolve_input에서 통상적인 FileNotFoundError로 이어지게 둔다.
     """
-    if ADDRESS_PATTERN.match(target):
+    if is_address:
         return cache.key_for_address(target, chain_id=ETHEREUM_MAINNET_CHAIN_ID)
     path = Path(target)
     if path.is_file():
@@ -68,14 +68,15 @@ def run_pipeline(target: str, work_dir: str = "reports", force_refresh: bool = F
     work = Path(work_dir)
     work.mkdir(parents=True, exist_ok=True)
 
-    cache_key = _cache_key_for_target(target)
+    is_address = bool(ADDRESS_PATTERN.match(target))
+
+    cache_key = _cache_key_for_target(target, is_address)
     if cache_key and not force_refresh:
         cached = cache.load(cache_key, work)
         if cached is not None:
             return cached
 
-    is_address = bool(ADDRESS_PATTERN.match(target))
-    sol_path = resolve_input(target, work)
+    sol_path = resolve_input(target, work, is_address)
     if not sol_path.exists():
         raise FileNotFoundError(f"컨트랙트 파일을 찾을 수 없습니다: {sol_path}")
 

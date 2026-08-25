@@ -54,8 +54,9 @@ def generate_markdown_report(preprocessed: dict, explanations: dict | None = Non
         f"# 보안 분석 리포트 — {preprocessed['contract_file']}",
         "",
         f"총 {len(enriched)}개의 finding이 발견되었습니다. "
-        "이 리포트는 정적분석(Slither) 결과를 규칙 기반으로 정리한 것이며, "
-        "**LLM 판단 없이 자동 생성**되었습니다. 최종 판단은 감사관의 검토가 필요합니다.",
+        "이 리포트는 정적분석(Slither) 결과를 규칙 기반으로 정리한 것입니다. "
+        "**판단은 하지 않습니다** — Slither가 찾은 것을 그대로, 다만 이해하기 쉽게 "
+        "정리할 뿐이며, 최종 판단은 감사관의 검토가 필요합니다.",
         "",
         "## 요약",
         "",

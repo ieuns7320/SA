@@ -1,13 +1,13 @@
 """
-Slither JSON 결과를 LLM 프롬프트 입력용으로 전처리한다.
+Slither JSON 결과를 Markdown 리포트/코드 뷰어 입력용으로 전처리한다.
 
 핵심 설계 원칙:
 1. Informational/severity가 낮은 노이즈(solc-version, low-level-calls 등)는
-   기본적으로 제외하거나 별도 섹션으로 분리한다. LLM 컨텍스트를 아끼고,
-   LLM이 "진짜 취약점"에 집중하게 하기 위함.
+   기본적으로 제외하거나 별도 섹션으로 분리한다. 감사자가 "진짜 취약점"에
+   집중할 수 있게 하기 위함.
 2. 각 finding에 실제 소스 코드 스니펫을 함께 붙인다. Slither의 description
-   텍스트만으로는 LLM이 코드 맥락(주변 함수, 상태변수)을 파악하기 어렵다.
-3. impact/confidence를 함께 넘겨서 LLM이 우선순위 판단의 근거로 쓰게 한다.
+   텍스트만으로는 코드 맥락(주변 함수, 상태변수)을 파악하기 어렵다.
+3. impact/confidence를 함께 넘겨서 감사자가 우선순위를 판단할 근거로 쓴다.
 4. import로 여러 파일을 참조하는 프로젝트를 지원한다 — finding마다 Slither가
    알려주는 filename_absolute를 따라가서 그 파일에서 스니펫을 뽑는다. 단일
    파일이라고 가정하지 않는다.
@@ -21,14 +21,19 @@ SEVERITY_ORDER = {"High": 0, "Medium": 1, "Low": 2, "Informational": 3}
 # 기본적으로 LLM에 넘기지 않는 low-value 노이즈성 detector
 NOISE_CHECKS = {"solc-version", "low-level-calls", "naming-convention", "pragma"}
 
-_source_cache: dict[str, list[str]] = {}
+def _load_lines(path: Path, source_cache: dict[str, list[str]]) -> list[str]:
+    """source_cache는 호출자(preprocess())가 만들어 넘기는 job 단위 캐시다.
 
-
-def _load_lines(path: Path) -> list[str]:
+    같은 job 안에서 한 파일에 finding이 여러 개일 때 반복 읽기를 피하는 게
+    목적이라 job이 끝나면 함께 버려져야 한다 — 예전엔 모듈 전역 dict였는데,
+    웹 서버 프로세스 수명 내내 절대 비워지지 않고(job마다 work_dir 경로가
+    달라 캐시가 job 간에 재사용되지도 않으면서) 계속 쌓이기만 하는
+    메모리 누수였다.
+    """
     key = str(path)
-    if key not in _source_cache:
-        _source_cache[key] = path.read_text(errors="ignore").splitlines()
-    return _source_cache[key]
+    if key not in source_cache:
+        source_cache[key] = path.read_text(errors="ignore").splitlines()
+    return source_cache[key]
 
 
 def extract_snippet(lines: list[str], first_line: int, last_line: int, context: int = 2) -> str:
@@ -126,6 +131,7 @@ def preprocess(
     source_root = source_root or entry_path.parent
 
     findings = []
+    source_cache: dict[str, list[str]] = {}
     for d in detectors:
         if not include_noise and d["check"] in NOISE_CHECKS:
             continue
@@ -150,16 +156,21 @@ def preprocess(
             first, last = 1, 1
 
         try:
-            snippet = extract_snippet(_load_lines(finding_file), first, last)
+            snippet = extract_snippet(_load_lines(finding_file, source_cache), first, last)
         except FileNotFoundError:
             snippet = "(소스 파일을 찾을 수 없어 스니펫을 표시할 수 없습니다)"
 
+        file_label = _relative_file_label(finding_file, source_root)
         findings.append({
-            "id": f"{d['check']}-{first}",
+            # file까지 포함해야 한다 — 멀티파일 컨트랙트에서 서로 다른 파일이
+            # 같은 detector·같은 시작 라인으로 겹치면(흔치 않지만 가능) id가
+            # 충돌해서 프론트(CodeViewer.tsx)의 React key로 쓰일 때 엉뚱한
+            # finding으로 스크롤되는 문제가 있었다.
+            "id": f"{d['check']}-{file_label}-{first}",
             "check": d["check"],
             "impact": d["impact"],
             "confidence": d["confidence"],
-            "file": _relative_file_label(finding_file, source_root),
+            "file": file_label,
             "lines": f"{first}-{last}",
             "start_line": first,
             "end_line": last,
